@@ -110,7 +110,7 @@ app.post('/run', async (req, res) => {
             fs.writeFileSync(filePath, code);
 
             command =
-                ``cd ${tempDir} && javac Main.java && java Main`;
+                `cd ${tempDir} && javac Main.java && java Main`;
         }
 
         // Invalid Language
