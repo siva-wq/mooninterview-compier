@@ -18,11 +18,15 @@ app.use(cors());
 
 app.use(express.json());
 
+
+// Home Route
 app.get('/', (req, res) => {
 
     res.send('Compiler API Running');
 });
 
+
+// Run Code Route
 app.post('/run', async (req, res) => {
 
     try {
@@ -46,7 +50,12 @@ app.post('/run', async (req, res) => {
 
         let command = '';
 
+
+
+        // =========================
         // JavaScript
+        // =========================
+
         if (language === 'javascript') {
 
             fileName = `${id}.js`;
@@ -55,10 +64,15 @@ app.post('/run', async (req, res) => {
 
             fs.writeFileSync(filePath, code);
 
-            command = `node ${filePath}`;
+            command = `node "${filePath}"`;
         }
 
+
+
+        // =========================
         // Python
+        // =========================
+
         else if (language === 'python') {
 
             fileName = `${id}.py`;
@@ -67,53 +81,84 @@ app.post('/run', async (req, res) => {
 
             fs.writeFileSync(filePath, code);
 
-            command = `python3 ${filePath}`;
+            command = `python3 "${filePath}"`;
         }
 
+
+
+        // =========================
         // C
+        // =========================
+
         else if (language === 'c') {
 
             fileName = `${id}.c`;
 
             filePath = path.join(tempDir, fileName);
 
-            const outputFile = path.join(tempDir, `${id}.out`);
+            const outputFile =
+                path.join(tempDir, `${id}.out`);
 
             fs.writeFileSync(filePath, code);
 
             command =
-                `gcc ${filePath} -o ${outputFile} && ${outputFile}`;
+                `gcc "${filePath}" -o "${outputFile}" && "${outputFile}"`;
         }
 
+
+
+        // =========================
         // C++
+        // =========================
+
         else if (language === 'cpp') {
 
             fileName = `${id}.cpp`;
 
             filePath = path.join(tempDir, fileName);
 
-            const outputFile = path.join(tempDir, `${id}.out`);
+            const outputFile =
+                path.join(tempDir, `${id}.out`);
 
             fs.writeFileSync(filePath, code);
 
             command =
-                `g++ ${filePath} -o ${outputFile} && ${outputFile}`;
+                `g++ "${filePath}" -o "${outputFile}" && "${outputFile}"`;
         }
 
+
+
+        // =========================
         // Java
+        // =========================
+
         else if (language === 'java') {
 
             fileName = 'Main.java';
 
             filePath = path.join(tempDir, fileName);
 
+            const classFile =
+                path.join(tempDir, 'Main.class');
+
+            // Delete old class file
+            if (fs.existsSync(classFile)) {
+
+                fs.unlinkSync(classFile);
+            }
+
             fs.writeFileSync(filePath, code);
 
             command =
-                `cd ${tempDir} && javac Main.java && java Main`;
+                `cd "${tempDir}" && javac Main.java && java Main`;
         }
 
+
+
+        // =========================
         // Invalid Language
+        // =========================
+
         else {
 
             return res.status(400).json({
@@ -123,6 +168,12 @@ app.post('/run', async (req, res) => {
                 output: 'Unsupported Language'
             });
         }
+
+
+
+        // =========================
+        // Execute Command
+        // =========================
 
         const process = exec(
 
@@ -134,20 +185,34 @@ app.post('/run', async (req, res) => {
 
             (error, stdout, stderr) => {
 
-                // Delete source file after execution
+                // Delete source file
                 if (fs.existsSync(filePath)) {
 
                     fs.unlinkSync(filePath);
                 }
 
+                // Delete Java class file
+                const classFile =
+                    path.join(tempDir, 'Main.class');
+
+                if (fs.existsSync(classFile)) {
+
+                    fs.unlinkSync(classFile);
+                }
+
                 // Error Handling
-                if (error || stderr) {
+                if (error) {
+
+                    console.log(stderr);
 
                     return res.json({
 
                         success: false,
 
-                        output: stderr || error.message
+                        output:
+                            stderr ||
+                            error.message ||
+                            "Execution Error"
                     });
                 }
 
@@ -156,12 +221,17 @@ app.post('/run', async (req, res) => {
 
                     success: true,
 
-                    output: stdout
+                    output: stdout || stderr
                 });
             }
         );
 
-        // Pass user input
+
+
+        // =========================
+        // User Input
+        // =========================
+
         if (input) {
 
             process.stdin.write(input);
@@ -183,6 +253,13 @@ app.post('/run', async (req, res) => {
         });
     }
 });
+
+
+
+// =========================
+// Java Test Route
+// =========================
+
 app.get('/java-test', (req, res) => {
 
     exec('java -version', (error, stdout, stderr) => {
@@ -195,6 +272,12 @@ app.get('/java-test', (req, res) => {
         res.send(stderr || stdout);
     });
 });
+
+
+
+// =========================
+// Start Server
+// =========================
 
 app.listen(PORT, () => {
 
