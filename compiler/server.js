@@ -6,7 +6,7 @@ const fs = require('fs');
 
 const path = require('path');
 
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -144,7 +144,7 @@ app.post('/run', async (req, res) => {
 
         else if (language === 'java') {
 
-            // Unique folder for each execution
+            // Unique folder for Java
             javaDir =
                 path.join(tempDir, id);
 
@@ -161,8 +161,278 @@ app.post('/run', async (req, res) => {
 
             fs.writeFileSync(filePath, code);
 
-            command =
-                `cd "${javaDir}" && javac Main.java && java Main`;
+            // ========================================
+            // Compile Java
+            // ========================================
+
+            const compileProcess = spawn(
+
+                'javac',
+
+                ['Main.java'],
+
+                {
+                    cwd: javaDir
+                }
+            );
+
+            let compileStdout = '';
+
+            let compileStderr = '';
+
+
+
+            compileProcess.stdout.on(
+
+                'data',
+
+                (data) => {
+
+                    compileStdout +=
+                        data.toString();
+                }
+            );
+
+
+
+            compileProcess.stderr.on(
+
+                'data',
+
+                (data) => {
+
+                    compileStderr +=
+                        data.toString();
+                }
+            );
+
+
+
+            compileProcess.on(
+
+                'close',
+
+                (compileCode) => {
+
+                    // Compilation Failed
+                    if (compileCode !== 0) {
+
+                        // Delete Java Folder
+                        if (
+                            fs.existsSync(javaDir)
+                        ) {
+
+                            fs.rmSync(
+
+                                javaDir,
+
+                                {
+                                    recursive: true,
+
+                                    force: true
+                                }
+                            );
+                        }
+
+                        return res.json({
+
+                            success: false,
+
+                            output:
+                                compileStderr ||
+                                compileStdout ||
+                                'Compilation Error'
+                        });
+                    }
+
+
+
+                    // ========================================
+                    // Run Java Program
+                    // ========================================
+
+                    const runProcess = spawn(
+
+                        'java',
+
+                        ['Main'],
+
+                        {
+                            cwd: javaDir
+                        }
+                    );
+
+                    let runStdout = '';
+
+                    let runStderr = '';
+
+
+
+                    runProcess.stdout.on(
+
+                        'data',
+
+                        (data) => {
+
+                            runStdout +=
+                                data.toString();
+                        }
+                    );
+
+
+
+                    runProcess.stderr.on(
+
+                        'data',
+
+                        (data) => {
+
+                            runStderr +=
+                                data.toString();
+                        }
+                    );
+
+
+
+                    // User Input
+                    if (input) {
+
+                        runProcess.stdin.write(
+                            input
+                        );
+
+                        runProcess.stdin.end();
+                    }
+
+
+
+                    // ========================================
+                    // Java Execution Complete
+                    // ========================================
+
+                    runProcess.on(
+
+                        'close',
+
+                        () => {
+
+                            // Delete Java Folder
+                            if (
+                                fs.existsSync(javaDir)
+                            ) {
+
+                                fs.rmSync(
+
+                                    javaDir,
+
+                                    {
+                                        recursive: true,
+
+                                        force: true
+                                    }
+                                );
+                            }
+
+                            // Runtime Error
+                            if (runStderr) {
+
+                                return res.json({
+
+                                    success: false,
+
+                                    output: runStderr
+                                });
+                            }
+
+                            // Success
+                            return res.json({
+
+                                success: true,
+
+                                output: runStdout
+                            });
+                        }
+                    );
+
+
+
+                    // Java Runtime Error
+                    runProcess.on(
+
+                        'error',
+
+                        (err) => {
+
+                            // Delete Java Folder
+                            if (
+                                fs.existsSync(javaDir)
+                            ) {
+
+                                fs.rmSync(
+
+                                    javaDir,
+
+                                    {
+                                        recursive: true,
+
+                                        force: true
+                                    }
+                                );
+                            }
+
+                            return res.json({
+
+                                success: false,
+
+                                output:
+                                    err.message ||
+                                    'Execution Error'
+                            });
+                        }
+                    );
+                }
+            );
+
+
+
+            // Java Compile Error
+            compileProcess.on(
+
+                'error',
+
+                (err) => {
+
+                    // Delete Java Folder
+                    if (
+                        fs.existsSync(javaDir)
+                    ) {
+
+                        fs.rmSync(
+
+                            javaDir,
+
+                            {
+                                recursive: true,
+
+                                force: true
+                            }
+                        );
+                    }
+
+                    return res.json({
+
+                        success: false,
+
+                        output:
+                            err.message ||
+                            'Compilation Error'
+                    });
+                }
+            );
+
+
+
+            return;
         }
 
 
@@ -184,7 +454,7 @@ app.post('/run', async (req, res) => {
 
 
         // ========================================
-        // Execute Code
+        // Execute JS/Python/C/C++
         // ========================================
 
         const process = exec(
@@ -197,10 +467,6 @@ app.post('/run', async (req, res) => {
 
             (error, stdout, stderr) => {
 
-                // ========================================
-                // Cleanup Files
-                // ========================================
-
                 // Delete source file
                 if (
                     filePath &&
@@ -210,7 +476,7 @@ app.post('/run', async (req, res) => {
                     fs.unlinkSync(filePath);
                 }
 
-                // Delete compiled C/C++ output
+                // Delete C/C++ executable
                 if (
                     outputFile &&
                     fs.existsSync(outputFile)
@@ -219,33 +485,10 @@ app.post('/run', async (req, res) => {
                     fs.unlinkSync(outputFile);
                 }
 
-                // Delete Java folder
-                if (
-                    javaDir &&
-                    fs.existsSync(javaDir)
-                ) {
-
-                    fs.rmSync(javaDir, {
-
-                        recursive: true,
-
-                        force: true
-                    });
-                }
 
 
-
-                // ========================================
                 // Error Handling
-                // ========================================
-
                 if (error) {
-
-                    console.log("ERROR:", error);
-
-                    console.log("STDERR:", stderr);
-
-                    console.log("STDOUT:", stdout);
 
                     return res.json({
 
@@ -260,10 +503,7 @@ app.post('/run', async (req, res) => {
 
 
 
-                // ========================================
                 // Success Output
-                // ========================================
-
                 res.json({
 
                     success: true,
