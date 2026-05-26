@@ -8,6 +8,8 @@ const path = require('path');
 
 const { exec } = require('child_process');
 
+const { v4: uuidv4 } = require('uuid');
+
 const app = express();
 
 const PORT = process.env.PORT || 5000;
@@ -15,6 +17,11 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 
 app.use(express.json());
+
+app.get('/', (req, res) => {
+
+    res.send('Compiler API Running');
+});
 
 app.post('/run', async (req, res) => {
 
@@ -24,67 +31,73 @@ app.post('/run', async (req, res) => {
 
         const tempDir = path.join(__dirname, 'temp');
 
+        // Create temp folder if not exists
         if (!fs.existsSync(tempDir)) {
 
             fs.mkdirSync(tempDir);
         }
 
+        // Unique file id
+        const id = uuidv4();
+
         let fileName = '';
+
+        let filePath = '';
 
         let command = '';
 
         // JavaScript
         if (language === 'javascript') {
 
-            fileName = 'main.js';
+            fileName = `${id}.js`;
 
-            fs.writeFileSync(
-                path.join(tempDir, fileName),
-                code
-            );
+            filePath = path.join(tempDir, fileName);
 
-            command = `node ${path.join(tempDir, fileName)}`;
+            fs.writeFileSync(filePath, code);
+
+            command = `node ${filePath}`;
         }
 
         // Python
         else if (language === 'python') {
 
-            fileName = 'main.py';
+            fileName = `${id}.py`;
 
-            fs.writeFileSync(
-                path.join(tempDir, fileName),
-                code
-            );
+            filePath = path.join(tempDir, fileName);
 
-            command = `python3 ${path.join(tempDir, fileName)}`;
+            fs.writeFileSync(filePath, code);
+
+            command = `python3 ${filePath}`;
         }
 
         // C
         else if (language === 'c') {
 
-            fileName = 'main.c';
+            fileName = `${id}.c`;
 
-            fs.writeFileSync(
-                path.join(tempDir, fileName),
-                code
-            );
+            filePath = path.join(tempDir, fileName);
+
+            const outputFile = path.join(tempDir, `${id}.out`);
+
+            fs.writeFileSync(filePath, code);
 
             command =
-                `gcc ${path.join(tempDir, fileName)} -o ${path.join(tempDir, 'main')} && ${path.join(tempDir, 'main')}`;
+                `gcc ${filePath} -o ${outputFile} && ${outputFile}`;
         }
 
         // C++
         else if (language === 'cpp') {
 
-            fileName = 'main.cpp';
+            fileName = `${id}.cpp`;
 
-            fs.writeFileSync(
-                path.join(tempDir, fileName),
-                code
-            );
+            filePath = path.join(tempDir, fileName);
+
+            const outputFile = path.join(tempDir, `${id}.out`);
+
+            fs.writeFileSync(filePath, code);
 
             command =
-                `g++ ${path.join(tempDir, fileName)} -o ${path.join(tempDir, 'main')} && ${path.join(tempDir, 'main')}`;
+                `g++ ${filePath} -o ${outputFile} && ${outputFile}`;
         }
 
         // Java
@@ -92,13 +105,23 @@ app.post('/run', async (req, res) => {
 
             fileName = 'Main.java';
 
-            fs.writeFileSync(
-                path.join(tempDir, fileName),
-                code
-            );
+            filePath = path.join(tempDir, fileName);
+
+            fs.writeFileSync(filePath, code);
 
             command =
-                `javac ${path.join(tempDir, fileName)} && java -cp ${tempDir} Main`;
+                `javac ${filePath} && java -cp ${tempDir} Main`;
+        }
+
+        // Invalid Language
+        else {
+
+            return res.status(400).json({
+
+                success: false,
+
+                output: 'Unsupported Language'
+            });
         }
 
         const process = exec(
@@ -111,21 +134,34 @@ app.post('/run', async (req, res) => {
 
             (error, stdout, stderr) => {
 
-                if (error) {
+                // Delete source file after execution
+                if (fs.existsSync(filePath)) {
+
+                    fs.unlinkSync(filePath);
+                }
+
+                // Error Handling
+                if (error || stderr) {
 
                     return res.json({
+
+                        success: false,
 
                         output: stderr || error.message
                     });
                 }
 
+                // Success Output
                 res.json({
+
+                    success: true,
 
                     output: stdout
                 });
             }
         );
 
+        // Pass user input
         if (input) {
 
             process.stdin.write(input);
@@ -141,6 +177,8 @@ app.post('/run', async (req, res) => {
 
         res.status(500).json({
 
+            success: false,
+
             output: 'Server Error'
         });
     }
@@ -148,5 +186,5 @@ app.post('/run', async (req, res) => {
 
 app.listen(PORT, () => {
 
-    console.log('Compiler Server Running');
+    console.log(`Compiler Server Running on Port ${PORT}`);
 });
