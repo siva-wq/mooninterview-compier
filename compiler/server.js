@@ -183,6 +183,18 @@ app.post('/run', async (req, res) => {
         });
     }
 });
+app.get('/java-test', (req, res) => {
+
+    exec('java -version', (error, stdout, stderr) => {
+
+        if (error) {
+
+            return res.send(error.message);
+        }
+
+        res.send(stderr || stdout);
+    });
+});
 
 app.listen(PORT, () => {
 
