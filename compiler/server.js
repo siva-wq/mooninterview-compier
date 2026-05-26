@@ -19,14 +19,20 @@ app.use(cors());
 app.use(express.json());
 
 
+// ========================================
 // Home Route
+// ========================================
+
 app.get('/', (req, res) => {
 
     res.send('Compiler API Running');
 });
 
 
+// ========================================
 // Run Code Route
+// ========================================
+
 app.post('/run', async (req, res) => {
 
     try {
@@ -35,13 +41,13 @@ app.post('/run', async (req, res) => {
 
         const tempDir = path.join(__dirname, 'temp');
 
-        // Create temp folder if not exists
+        // Create temp folder
         if (!fs.existsSync(tempDir)) {
 
             fs.mkdirSync(tempDir);
         }
 
-        // Unique file id
+        // Unique ID
         const id = uuidv4();
 
         let fileName = '';
@@ -50,11 +56,15 @@ app.post('/run', async (req, res) => {
 
         let command = '';
 
+        let outputFile = '';
+
+        let javaDir = '';
 
 
-        // =========================
+
+        // ========================================
         // JavaScript
-        // =========================
+        // ========================================
 
         if (language === 'javascript') {
 
@@ -69,9 +79,9 @@ app.post('/run', async (req, res) => {
 
 
 
-        // =========================
+        // ========================================
         // Python
-        // =========================
+        // ========================================
 
         else if (language === 'python') {
 
@@ -86,9 +96,9 @@ app.post('/run', async (req, res) => {
 
 
 
-        // =========================
+        // ========================================
         // C
-        // =========================
+        // ========================================
 
         else if (language === 'c') {
 
@@ -96,7 +106,7 @@ app.post('/run', async (req, res) => {
 
             filePath = path.join(tempDir, fileName);
 
-            const outputFile =
+            outputFile =
                 path.join(tempDir, `${id}.out`);
 
             fs.writeFileSync(filePath, code);
@@ -107,9 +117,9 @@ app.post('/run', async (req, res) => {
 
 
 
-        // =========================
+        // ========================================
         // C++
-        // =========================
+        // ========================================
 
         else if (language === 'cpp') {
 
@@ -117,7 +127,7 @@ app.post('/run', async (req, res) => {
 
             filePath = path.join(tempDir, fileName);
 
-            const outputFile =
+            outputFile =
                 path.join(tempDir, `${id}.out`);
 
             fs.writeFileSync(filePath, code);
@@ -128,36 +138,38 @@ app.post('/run', async (req, res) => {
 
 
 
-        // =========================
+        // ========================================
         // Java
-        // =========================
+        // ========================================
 
         else if (language === 'java') {
 
+            // Unique folder for each execution
+            javaDir =
+                path.join(tempDir, id);
+
+            // Create folder
+            if (!fs.existsSync(javaDir)) {
+
+                fs.mkdirSync(javaDir);
+            }
+
             fileName = 'Main.java';
 
-            filePath = path.join(tempDir, fileName);
-
-            const classFile =
-                path.join(tempDir, 'Main.class');
-
-            // Delete old class file
-            if (fs.existsSync(classFile)) {
-
-                fs.unlinkSync(classFile);
-            }
+            filePath =
+                path.join(javaDir, fileName);
 
             fs.writeFileSync(filePath, code);
 
             command =
-                `cd "${tempDir}" && javac Main.java && java Main`;
+                `cd "${javaDir}" && javac Main.java && java Main`;
         }
 
 
 
-        // =========================
+        // ========================================
         // Invalid Language
-        // =========================
+        // ========================================
 
         else {
 
@@ -171,9 +183,9 @@ app.post('/run', async (req, res) => {
 
 
 
-        // =========================
-        // Execute Command
-        // =========================
+        // ========================================
+        // Execute Code
+        // ========================================
 
         const process = exec(
 
@@ -185,25 +197,55 @@ app.post('/run', async (req, res) => {
 
             (error, stdout, stderr) => {
 
+                // ========================================
+                // Cleanup Files
+                // ========================================
+
                 // Delete source file
-                if (fs.existsSync(filePath)) {
+                if (
+                    filePath &&
+                    fs.existsSync(filePath)
+                ) {
 
                     fs.unlinkSync(filePath);
                 }
 
-                // Delete Java class file
-                const classFile =
-                    path.join(tempDir, 'Main.class');
+                // Delete compiled C/C++ output
+                if (
+                    outputFile &&
+                    fs.existsSync(outputFile)
+                ) {
 
-                if (fs.existsSync(classFile)) {
-
-                    fs.unlinkSync(classFile);
+                    fs.unlinkSync(outputFile);
                 }
 
+                // Delete Java folder
+                if (
+                    javaDir &&
+                    fs.existsSync(javaDir)
+                ) {
+
+                    fs.rmSync(javaDir, {
+
+                        recursive: true,
+
+                        force: true
+                    });
+                }
+
+
+
+                // ========================================
                 // Error Handling
+                // ========================================
+
                 if (error) {
 
-                    console.log(stderr);
+                    console.log("ERROR:", error);
+
+                    console.log("STDERR:", stderr);
+
+                    console.log("STDOUT:", stdout);
 
                     return res.json({
 
@@ -216,7 +258,12 @@ app.post('/run', async (req, res) => {
                     });
                 }
 
+
+
+                // ========================================
                 // Success Output
+                // ========================================
+
                 res.json({
 
                     success: true,
@@ -228,9 +275,9 @@ app.post('/run', async (req, res) => {
 
 
 
-        // =========================
+        // ========================================
         // User Input
-        // =========================
+        // ========================================
 
         if (input) {
 
@@ -256,9 +303,9 @@ app.post('/run', async (req, res) => {
 
 
 
-// =========================
+// ========================================
 // Java Test Route
-// =========================
+// ========================================
 
 app.get('/java-test', (req, res) => {
 
@@ -275,9 +322,9 @@ app.get('/java-test', (req, res) => {
 
 
 
-// =========================
+// ========================================
 // Start Server
-// =========================
+// ========================================
 
 app.listen(PORT, () => {
 
